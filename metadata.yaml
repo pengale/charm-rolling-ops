@@ -1,0 +1,17 @@
+# Copyright 2022 Penny Gale
+# See LICENSE file for licensing details.
+
+# For a complete list of supported options, see:
+# https://juju.is/docs/sdk/metadata-reference
+name: charm-rolling-ops
+display-name: |
+  Rolling Ops Library and Example Charm
+description: |
+  This is a charm containing the Rolling Ops library, along with a sample implementation.
+summary: |
+  Sample charm and re-usable library.,
+bases:
+  - name: ubuntu
+    channel: focal
+    architectures:
+      - amd64

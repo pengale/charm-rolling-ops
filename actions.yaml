@@ -1,0 +1,10 @@
+# Copyright 2022 Penny Gale
+# See LICENSE file for licensing details.
+
+restart:
+  description: Restarts the example service
+  params:
+    fail:
+      description: "Service failed to restart"
+      type: string
+      default: ""

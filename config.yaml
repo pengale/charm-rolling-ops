@@ -1,0 +1,8 @@
+# Copyright 2022 Penny Gale
+# See LICENSE file for licensing details.
+
+options:
+  service:
+    default: TODO
+    description: The service to restart.
+    type: string
