@@ -9,8 +9,9 @@
 import logging
 
 from ops.charm import CharmBase
+from ops.framework import StoredState
 from ops.main import main
-# from ops.model import ActiveStatus
+from charms.rolling_ops.v0.rollingops import RollingOpsManager, RollingEvents
 
 logger = logging.getLogger(__name__)
 
@@ -18,19 +19,22 @@ logger = logging.getLogger(__name__)
 class CharmRollingOpsCharm(CharmBase):
     """Charm the service."""
 
+    on = RollingEvents()
+    _stored = StoredState()
+
     def __init__(self, *args):
         super().__init__(*args)
-        self.framework.observe(self.on.restart_action, self._on_restart_action)
 
-    def _on_restart_action(self, event):
-        """Fire off a rolling restart.
-        """
-        fail = event.params["fail"]
-        if fail:
-            event.fail(fail)
-        else:
-            event.set_results({"restart": "Service {} restarted!.".format(
-                self.model.config['service'])})
+        self.restart = RollingOpsManager(self, 'restart', self._restart, self.on.restart_action)
+
+        # Sentinal for testing (omit from production charms)
+
+        self._stored.set_default(restarted=False)
+
+    def _restart(self, event):
+        # In a production charm, we'd perhaps import the systemd library, and run systemd.restart_service.
+        # Here, we just set a sentinal in our stored state, so that we can run our tests.
+        self._stored.restarted = True
 
 
 if __name__ == "__main__":
