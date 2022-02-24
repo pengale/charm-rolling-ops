@@ -3,7 +3,7 @@
 
 # For a complete list of supported options, see:
 # https://juju.is/docs/sdk/metadata-reference
-name: charm-rolling-ops
+name: rolling-ops
 display-name: |
   Rolling Ops Library and Example Charm
 description: |

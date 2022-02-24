@@ -1,4 +1,4 @@
-# charm-rolling-ops
+# rolling-ops
 
 ## Description
 
