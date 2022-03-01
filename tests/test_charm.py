@@ -32,7 +32,7 @@ class TestCharm(unittest.TestCase):
     def test_acquire(self):
         # A human operator runs the "restart" action.
         action_event = Mock()
-        action_event.name = "restart"
+        action_event.params = dict(name="restart")
         self.harness.charm.restart._on_acquire_lock(action_event)
 
         data = self.harness.charm.model.relations["restart"][0].data

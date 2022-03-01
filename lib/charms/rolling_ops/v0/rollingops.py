@@ -51,7 +51,7 @@ class SomeCharm(...):
 
 """
 import logging
-from ops.charm import CharmBase, RelationChangedEvent, CharmEvents
+from ops.charm import CharmBase, RelationChangedEvent, CharmEvents, ActionEvent
 from ops.framework import EventBase, EventSource, Object
 
 logger = logging.getLogger(__name__)
@@ -335,9 +335,9 @@ class RollingOpsManager(Object):
                 # It's time for the leader to run with lock.
                 self.charm.on.run_with_lock.emit(name=self.name)
 
-    def _on_acquire_lock(self: CharmBase, event: AcquireLock):
+    def _on_acquire_lock(self: CharmBase, event: ActionEvent):
         """Request a lock."""
-        if not event.name == self.name:
+        if not event.params.get('name') == self.name:
             return
 
         Lock(self.name, self.charm).acquire()  # Updates relation data
