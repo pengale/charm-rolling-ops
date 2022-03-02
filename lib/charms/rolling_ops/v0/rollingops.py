@@ -138,7 +138,7 @@ class Lock:
 
         """
         unit_status = self.relation.data[self.unit].get('status', None)
-        app_status = self.relation.data[self.app].get(self.unit, self.IDLE)
+        app_status = self.relation.data[self.app].get(str(self.unit), self.IDLE)
 
         if app_status == self.GRANTED and unit_status == self.RELEASE:
             # Active release request.
@@ -163,10 +163,10 @@ class Lock:
             self.relation.data[self.unit].update({"status": status})
 
         if status == self.GRANTED:
-            self.relation.data[self.app].update({self.unit: status})
+            self.relation.data[self.app].update({str(self.unit): status})
 
         if status is self.IDLE:
-            self.relation.data[self.app].update({self.unit: status})
+            self.relation.data[self.app].update({str(self.unit): status})
 
     def acquire(self):
         self.status = self.ACQUIRE

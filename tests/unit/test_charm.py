@@ -55,7 +55,7 @@ class TestCharm(unittest.TestCase):
 
         # Unit 1 should have requested the lock, and been granted the lock.
         self.assertEqual(rel_data[unit_1]["status"], "acquire")
-        self.assertEqual(rel_data[self.harness.model.app][unit_1], "granted")
+        self.assertEqual(rel_data[self.harness.model.app][str(unit_1)], "granted")
 
         # Unit 0 should have requested the lock, but not yet granted the lock to itself.
         self.assertEqual(rel_data[unit_0]["status"], "acquire")
@@ -68,5 +68,5 @@ class TestCharm(unittest.TestCase):
         rel_data = self.harness.charm.model.relations["restart"][0].data
         self.assertEqual(rel_data[unit_1]["status"], "release")
         self.assertEqual(rel_data[unit_0]["status"], "release")
-        self.assertEqual(rel_data[self.harness.model.app][unit_1], "idle")
-        self.assertEqual(rel_data[self.harness.model.app][unit_0], "idle")
+        self.assertEqual(rel_data[self.harness.model.app][str(unit_1)], "idle")
+        self.assertEqual(rel_data[self.harness.model.app][str(unit_0)], "idle")
