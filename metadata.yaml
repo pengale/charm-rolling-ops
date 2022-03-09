@@ -18,4 +18,3 @@ bases:
 peers:
     restart:
         interface: rolling_op
-

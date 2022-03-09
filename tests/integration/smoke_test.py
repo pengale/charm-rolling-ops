@@ -1,22 +1,30 @@
-#!/usr/bin/env python3
-# Copyright 2021 Canonical Ltd.
-# See LICENSE file for licensing details.
-
+# Copyright 2022 Canonical Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Learn more about testing at: https://juju.is/docs/sdk/testing
 
 import logging
 import unittest
-from subprocess import check_output
 import uuid
 
-from juju import jasyncio
-from juju.model import Model, Controller
+from juju.model import Controller
 
-
-CHARM_FILE="./rolling-ops_ubuntu-20.04-amd64.charm"
+CHARM_FILE = "./rolling-ops_ubuntu-20.04-amd64.charm"
 
 logging.basicConfig(level=logging.INFO)
 
-ws_logger = logging.getLogger('websockets.protocol')
+ws_logger = logging.getLogger("websockets.protocol")
 ws_logger.setLevel(logging.INFO)
 
 
@@ -57,22 +65,20 @@ class TestSmoke(unittest.IsolatedAsyncioTestCase):
         """
         # Deploy, and verify deployment
         app = await self.model.deploy(CHARM_FILE)
-        await self.model.block_until(lambda: app.status in ('error', 'blocked', 'active'))
+        await app.add_units(count=2)
+        await self.model.block_until(lambda: app.status in ("error", "blocked", "active"))
 
-        self.assertEqual(app.status, 'active')
+        self.assertEqual(app.status, "active")
 
-        # Add some units, and run a rolling restart.
-        count = 2
-        for i in range(0, count):
-            await self.model.add_machine()
-        await app.add_units(count=count)
-
+        # Run the restart, with a delay to alleviate timing issues.
         for unit in app.units:
-            action = await unit.run_action('restart')
-            # logging.debug("Action results: %s", action.results) # TODO assert
+            # TODO: check action status.
+            await unit.run_action("restart", delay="10")
 
-        await self.model.block_until(lambda: app.status in ('error', 'blocked', 'active'))
-        self.assertEqual(app.status, 'active')
+        await self.model.block_until(lambda: app.status in ("waiting", "maintenance", "error"))
+        self.assertFalse(app.status == "error")
+        await self.model.block_until(lambda: app.status in ("error", "blocked", "active"))
+        self.assertEqual(app.status, "active")
 
     async def asyncTearDown(self):
         """Destroy the test model, and disconnect from the controller.

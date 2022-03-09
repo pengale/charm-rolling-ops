@@ -1,18 +1,28 @@
 #!/usr/bin/env python3
-# Copyright 2022 Penny Gale
-# See LICENSE file for licensing details.
+# Copyright 2022 Canonical Ltd.
 #
-# Learn more at: https://juju.is/docs/sdk
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 """Sample charm using the rolling ops library."""
 
 import logging
+import time
 
+from charms.rolling_ops.v0.rollingops import RollingEvents, RollingOpsManager
 from ops.charm import CharmBase
 from ops.framework import StoredState
-from ops.model import ActiveStatus
 from ops.main import main
-from charms.rolling_ops.v0.rollingops import RollingOpsManager, RollingEvents
+from ops.model import ActiveStatus
 
 logger = logging.getLogger(__name__)
 
@@ -26,20 +36,29 @@ class CharmRollingOpsCharm(CharmBase):
     def __init__(self, *args):
         super().__init__(*args)
 
-        self.restart = RollingOpsManager(self, 'restart', self._restart, self.on.restart_action)
+        self.restart = RollingOpsManager(charm=self, relation="restart", callback=self._restart)
         self.framework.observe(self.on.install, self._on_install)
+        self.framework.observe(self.on.restart_action, self._on_restart_action)
 
-        # Sentinal for testing (omit from production charms)
-
+        # Sentinel for testing (omit from production charms)
         self._stored.set_default(restarted=False)
+        self._stored.set_default(delay=None)
 
     def _restart(self, event):
-        # In a production charm, we'd perhaps import the systemd library, and run systemd.restart_service.
-        # Here, we just set a sentinal in our stored state, so that we can run our tests.
+        # In a production charm, we'd perhaps import the systemd library, and run
+        # systemd.restart_service.  Here, we just set a sentinal in our stored state, so
+        # that we can run our tests.
+        if self._stored.delay:
+            time.sleep(int(self._stored.delay))
         self._stored.restarted = True
 
     def _on_install(self, event):
         self.unit.status = ActiveStatus()
+
+    def _on_restart_action(self, event):
+        self._stored.delay = event.params.get("delay")
+
+        self.on.aqcuire_lock.emit(name="restart")
 
 
 if __name__ == "__main__":
