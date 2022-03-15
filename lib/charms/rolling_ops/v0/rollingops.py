@@ -29,13 +29,8 @@ peers:
         interface: rolling_op
 ```
 
-Import the library, and enable it by doing the following:
-
-1. Override the Charm's `on` property with the RollingEvents class from the library.
-2. Add a callback containing code to be executed to the Charm object. Here, we call this
-method `_restart`.
-3. Initialize a RollingOpsManager class, passing in the Charm, name of the peer relation,
-and restart handler.
+Import the library, and enable it by doing initializing a RollingOpsManager class, passing
+in the Charm, name of the peer relation, and restart handler.
 
 src/charm.py
 ```python
@@ -44,15 +39,12 @@ from charms.rolling_ops.v0.rollingops import RollingOpsManager, RollingEvents
 # ...
 
 class SomeCharm(...):
-    # ...
-    on = RollingEvents
-    # ...
-
     def __init__(...)
         # ...
-        self.restart = RollingOpsManager(charm=self, relation="restart", callback=self._restart)
+        self.restart_manager = RollingOpsManager(
+            charm=self, relation="restart", callback=self._restart
+        )
         # ...
-
     def _restart(self, event):
         systemd.service_restart('foo')
 ```
@@ -61,9 +53,8 @@ To kick off the rolling restart, emit the AcquireLock event in your charm. For e
 you might do so with an action:
 
 ```python
-
     def _on_restart_action(self, event):
-        self.charm.on.acquire_lock.emit(name="restart")
+        self.charm.on[self.restart_manager.name].acquire_lock.emit()
 ```
 
 """
@@ -71,8 +62,8 @@ import logging
 from enum import Enum
 from typing import AnyStr, Callable
 
-from ops.charm import ActionEvent, CharmBase, CharmEvents, RelationChangedEvent
-from ops.framework import EventBase, EventSource, Object
+from ops.charm import ActionEvent, CharmBase, RelationChangedEvent
+from ops.framework import EventBase, Object
 from ops.model import ActiveStatus, MaintenanceStatus, WaitingStatus
 
 logger = logging.getLogger(__name__)
@@ -145,14 +136,15 @@ class Lock:
 
     """
 
-    def __init__(self, rel_name, charm, unit=None):
-        self.relation = charm.model.relations[rel_name][0]
+    def __init__(self, manager, unit=None):
+
+        self.relation = manager.model.relations[manager.name][0]
         if not self.relation:
             # TODO: defer caller in this case (probably just fired too soon).
             raise LockNoRelationError()
 
-        self.unit = unit or charm.framework.model.unit
-        self.app = charm.framework.model.app
+        self.unit = unit or manager.model.unit
+        self.app = manager.model.app
 
     @property
     def _state(self) -> LockState:
@@ -230,74 +222,40 @@ class Lock:
 class Locks:
     """Generator that returns a list of locks."""
 
-    def __init__(self, rel_name, charm):
-        self.rel_name = rel_name
-        self.charm = charm
+    def __init__(self, manager):
+        self.manager = manager
 
         # Gather all the units.
-        relation = charm.model.relations[rel_name][0]
+        relation = manager.model.relations[manager.name][0]
         units = [unit for unit in relation.units]
 
         # Plus our unit ...
-        units.append(charm.framework.model.unit)
+        units.append(manager.model.unit)
 
         self.units = units
 
     def __iter__(self):
         """Yields a lock for each unit we can find on the relation."""
         for unit in self.units:
-            yield Lock(self.rel_name, self.charm, unit=unit)
+            yield Lock(self.manager, unit=unit)
 
 
-class RollingEvent(EventBase):
-    """Base class for the custom events in this lib.
-
-    Keeps a "name" used to distinguish between multiple uses of the library.
-    """
-
-    def __init__(self, handle, name):
-        """Accept and save name."""
-        super().__init__(handle)
-        self._name = name
-
-    def snapshot(self):
-        """Save off data."""
-        return {"name": self._name}
-
-    def restore(self, snapshot):
-        """Reload data."""
-        self._name = snapshot["name"]
-
-    @property
-    def name(self):
-        """The `name` property allows us to namespace Rolling Operations."""
-        return self._name
-
-
-class RunWithLock(RollingEvent):
+class RunWithLock(EventBase):
     """Event to signal that this unit should run the callback."""
 
     pass
 
 
-class AcquireLock(RollingEvent):
+class AcquireLock(EventBase):
     """Signals that this unit wants to acquire a lock."""
 
     pass
 
 
-class ProcessLocks(RollingEvent):
+class ProcessLocks(EventBase):
     """Used to tell the leader to process all locks."""
 
     pass
-
-
-class RollingEvents(CharmEvents):
-    """Name our custom events, so they can be attached."""
-
-    run_with_lock = EventSource(RunWithLock)
-    acquire_lock = EventSource(AcquireLock)
-    process_locks = EventSource(ProcessLocks)
 
 
 class RollingOpsManager(Object):
@@ -314,16 +272,23 @@ class RollingOpsManager(Object):
             callback: a closure to run when we have a lock. (It must take a CharmBase object and
                 EventBase object as args.)
         """
+        # "Inherit" from the charm's class. This gives us access to the framework as
+        # self.framework, as well as the self.model shortcut.
         super().__init__(charm, None)
 
-        self.charm = charm
         self.name = relation
         self._callback = callback
+        self.charm = charm  # Maintain a reference to charm, so we can emit events.
 
+        charm.on.define_event("{}_run_with_lock".format(self.name), RunWithLock)
+        charm.on.define_event("{}_acquire_lock".format(self.name), AcquireLock)
+        charm.on.define_event("{}_process_locks".format(self.name), ProcessLocks)
+
+        # Watch those events (plus the built in relation event).
         self.framework.observe(charm.on[self.name].relation_changed, self._on_relation_changed)
-        self.framework.observe(charm.on.acquire_lock, self._on_acquire_lock)
-        self.framework.observe(charm.on.run_with_lock, self._on_run_with_lock)
-        self.framework.observe(charm.on.process_locks, self._on_process_locks)
+        self.framework.observe(charm.on[self.name].acquire_lock, self._on_acquire_lock)
+        self.framework.observe(charm.on[self.name].run_with_lock, self._on_run_with_lock)
+        self.framework.observe(charm.on[self.name].process_locks, self._on_process_locks)
 
     def _callback(self: CharmBase, event: EventBase) -> None:
         """Placeholder for the function that actually runs our event.
@@ -341,20 +306,16 @@ class RollingOpsManager(Object):
         Then, if we are the leader, fire off a process locks event.
 
         """
-        if not event.relation.name == self.name:
-            # This is not relevant to us.
-            return
-
-        lock = Lock(self.name, self.charm)
+        lock = Lock(self)
 
         if lock.is_pending():
-            self.charm.unit.status = WaitingStatus("Awaiting {} operation".format(self.name))
+            self.model.unit.status = WaitingStatus("Awaiting {} operation".format(self.name))
 
         if lock.is_held():
-            self.charm.on.run_with_lock.emit(name=self.name)
+            self.charm.on[self.name].run_with_lock.emit()
 
-        if self.framework.model.unit.is_leader():
-            self.charm.on.process_locks.emit(name=self.name)
+        if self.model.unit.is_leader():
+            self.charm.on[self.name].process_locks.emit()
 
     def _on_process_locks(self: CharmBase, event: ProcessLocks):
         """Process locks.
@@ -362,15 +323,12 @@ class RollingOpsManager(Object):
         Runs only on the leader. Updates the status of all locks.
 
         """
-        if not event.name == self.name:
-            return
-
-        if not self.framework.model.unit.is_leader():
+        if not self.model.unit.is_leader():
             return
 
         pending = []
 
-        for lock in Locks(self.name, self.charm):
+        for lock in Locks(self):
             if lock.is_held():
                 # One of our units has the lock -- return without further processing.
                 return
@@ -379,7 +337,7 @@ class RollingOpsManager(Object):
                 lock.clear()  # Updates relation data
 
             if lock.is_pending():
-                if lock.unit == self.charm.model.unit:
+                if lock.unit == self.model.unit:
                     # Always run on the leader last.
                     pending.insert(0, lock)
                 else:
@@ -388,27 +346,30 @@ class RollingOpsManager(Object):
         # If we reach this point, and we have pending units, we want to grant a lock to
         # one of them.
         if pending:
+            self.model.app.status = MaintenanceStatus("Beginning rolling {}".format(self.name))
             lock = pending[-1]
             lock.grant()
-            if lock.unit == self.charm.model.unit:
+            if lock.unit == self.model.unit:
                 # It's time for the leader to run with lock.
-                self.charm.on.run_with_lock.emit(name=self.name)
+                self.charm.on[self.name].run_with_lock.emit()
+            return
+
+        self.model.app.status = ActiveStatus()
 
     def _on_acquire_lock(self: CharmBase, event: ActionEvent):
         """Request a lock."""
-        if not event.params.get("name") == self.name:
-            return
-
-        Lock(self.name, self.charm).acquire()  # Updates relation data
+        try:
+            Lock(self).acquire()  # Updates relation data
+        except LockNoRelationError:
+            logger.debug("No {} peer relation yet. Delaying rolling op.".format(self.name))
+            event.defer()
 
     def _on_run_with_lock(self: CharmBase, event: RunWithLock):
-        if not event.name == self.name:
-            return
-
-        lock = Lock(self.name, self.charm)
-        self.charm.unit.status = MaintenanceStatus("Executing {} operation".format(self.name))
+        lock = Lock(self)
+        self.model.unit.status = MaintenanceStatus("Executing {} operation".format(self.name))
         self._callback(event)
-        self.charm.unit.status = ActiveStatus()
         lock.release()  # Updates relation data
-        if lock.unit == self.charm.model.unit:
-            self.charm.on.process_locks.emit(name=self.name)
+        if lock.unit == self.model.unit:
+            self.charm.on[self.name].process_locks.emit()
+
+        self.model.unit.status = ActiveStatus()

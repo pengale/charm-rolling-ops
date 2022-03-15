@@ -17,6 +17,7 @@
 import unittest
 from unittest.mock import Mock
 
+from ops.model import ActiveStatus, MaintenanceStatus, WaitingStatus
 from ops.testing import Harness
 
 from charm import CharmRollingOpsCharm
@@ -31,20 +32,13 @@ class TestCharm(unittest.TestCase):
 
     def test_restart(self):
         # Verify that our _restart handler gets called when we call RunWithLock
-        self.harness.charm.on.run_with_lock.emit(name="restart")
+        self.harness.charm.on["restart"].run_with_lock.emit()
         self.assertTrue(self.harness.charm._stored.restarted)
-
-    def test_wrong_restart(self):
-        # Verify that our _restart handler gets called when we call RunWithLock with the
-        # wrong name.
-        self.harness.charm.on.run_with_lock.emit(name="foo")
-        self.assertFalse(self.harness.charm._stored.restarted)
 
     def test_acquire(self):
         # A human operator runs the "restart" action.
         action_event = Mock()
-        action_event.params = dict(name="restart")
-        self.harness.charm.restart._on_acquire_lock(action_event)
+        self.harness.charm.restart_manager._on_acquire_lock(action_event)
 
         data = self.harness.charm.model.relations["restart"][0].data
 
@@ -68,6 +62,13 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(rel_data[unit_1]["state"], "acquire")
         self.assertEqual(rel_data[self.harness.model.app][str(unit_1)], "granted")
 
+        self.assertEqual(
+            self.harness.charm.model.app.status, MaintenanceStatus("Beginning rolling restart")
+        )
+        self.assertEqual(
+            self.harness.charm.model.unit.status, WaitingStatus("Awaiting restart operation")
+        )
+
         # Unit 0 should have requested the lock, but not yet granted the lock to itself.
         self.assertEqual(rel_data[unit_0]["state"], "acquire")
 
@@ -81,3 +82,6 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(rel_data[unit_0]["state"], "release")
         self.assertEqual(rel_data[self.harness.model.app][str(unit_1)], "idle")
         self.assertEqual(rel_data[self.harness.model.app][str(unit_0)], "idle")
+
+        self.assertEqual(self.harness.charm.model.app.status, ActiveStatus())
+        self.assertEqual(self.harness.charm.model.unit.status, ActiveStatus())

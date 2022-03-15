@@ -18,7 +18,7 @@
 import logging
 import time
 
-from charms.rolling_ops.v0.rollingops import RollingEvents, RollingOpsManager
+from charms.rolling_ops.v0.rollingops import RollingOpsManager
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.main import main
@@ -30,13 +30,15 @@ logger = logging.getLogger(__name__)
 class CharmRollingOpsCharm(CharmBase):
     """Charm the service."""
 
-    on = RollingEvents()
     _stored = StoredState()
 
     def __init__(self, *args):
         super().__init__(*args)
 
-        self.restart = RollingOpsManager(charm=self, relation="restart", callback=self._restart)
+        self.restart_manager = RollingOpsManager(
+            charm=self, relation="restart", callback=self._restart
+        )
+
         self.framework.observe(self.on.install, self._on_install)
         self.framework.observe(self.on.restart_action, self._on_restart_action)
 
@@ -58,7 +60,7 @@ class CharmRollingOpsCharm(CharmBase):
     def _on_restart_action(self, event):
         self._stored.delay = event.params.get("delay")
 
-        self.on.aqcuire_lock.emit(name="restart")
+        self.on[self.restart_manager.name].acquire_lock.emit()
 
 
 if __name__ == "__main__":

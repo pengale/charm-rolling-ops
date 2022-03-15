@@ -4,10 +4,6 @@
 restart:
   description: Restarts the example service
   params:
-    name:
-      description: "Name of relation to poke."
-      type: string
-      default: "restart"
     delay:
       description: "Introduce an artificial delay (for testing)."
       type: string

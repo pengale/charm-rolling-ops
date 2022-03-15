@@ -73,9 +73,9 @@ class TestSmoke(unittest.IsolatedAsyncioTestCase):
         # Run the restart, with a delay to alleviate timing issues.
         for unit in app.units:
             # TODO: check action status.
-            await unit.run_action("restart", delay="10")
+            await unit.run_action("restart", delay="1")
 
-        await self.model.block_until(lambda: app.status in ("waiting", "maintenance", "error"))
+        await self.model.block_until(lambda: app.status in ("maintenance", "error"))
         self.assertFalse(app.status == "error")
         await self.model.block_until(lambda: app.status in ("error", "blocked", "active"))
         self.assertEqual(app.status, "active")
