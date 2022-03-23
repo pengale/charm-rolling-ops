@@ -4,7 +4,7 @@
 restart:
   description: Restarts the example service
   params:
-    fail:
-      description: "Service failed to restart"
+    delay:
+      description: "Introduce an artificial delay (for testing)."
       type: string
-      default: ""
+      default: null

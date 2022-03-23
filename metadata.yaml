@@ -15,3 +15,6 @@ bases:
     channel: focal
     architectures:
       - amd64
+peers:
+    restart:
+        interface: rolling_op
