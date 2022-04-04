@@ -12,30 +12,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""A library to enable charms to implement "rolling" or "serialized" operations.
+"""A library which enables "rolling" operations across the units of a charmed Application.
 
-E.g., a rolling restart.
+For example, a rolling restart, in which all units in an application restart, but no two
+units restart at the same time.
 
-You may use this library directly, or extend it to customize behavior.
+In order to implement a rolling restart with this library, a charm author should add the
+following lines of code, to the following files:
 
-For example, in order to implement a rolling restart, a charm author would need to add the
-following lines of code, to the following files (note the consistent use of the name "restart")
-to namespace this particular rolling op:
-
-Add a peer relation to `metadata.yaml`:
+Add a peer relation called 'restart' to `metadata.yaml`:
 ```yaml
 peers:
     restart:
         interface: rolling_op
 ```
 
-Import the library, and enable it by doing initializing a RollingOpsManager class, passing
-in the Charm, name of the peer relation, and restart handler.
+Import the library into src/charm.py, and initialiaze a RollingOpsManager in the Charm's
+`__init__`. The charm should also define a callback routine, which will be executed when
+this unit holds the distributed lock.
 
 src/charm.py
 ```python
 # ...
-from charms.rolling_ops.v0.rollingops import RollingOpsManager, RollingEvents
+from charms.rolling_ops.v0.rollingops import RollingOpsManager
 # ...
 
 class SomeCharm(...):
@@ -49,11 +48,11 @@ class SomeCharm(...):
         systemd.service_restart('foo')
 ```
 
-To kick off the rolling restart, emit the AcquireLock event in your charm. For example,
-you might do so with an action:
+To kick off the rolling restart, emit this library's AcquireLock event in your charm. For
+example, you might do so with an action:
 
 ```python
-    def _on_restart_action(self, event):
+    def _on_trigger_restart(self, event):
         self.charm.on[self.restart_manager.name].acquire_lock.emit()
 ```
 
@@ -76,7 +75,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 1
+LIBPATCH = 2
 
 
 class LockNoRelationError(Exception):
