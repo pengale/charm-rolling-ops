@@ -80,6 +80,30 @@ class TestSmoke(unittest.IsolatedAsyncioTestCase):
         await self.model.block_until(lambda: app.status in ("error", "blocked", "active"))
         self.assertEqual(app.status, "active")
 
+    async def test_smoke_single_unit(self):
+        """Basic smoke test, on a single unit.
+
+        Verify that deployment and rolling ops suceed for a single unit.
+        """
+        # Grab the application
+        app = await self.model.deploy(CHARM_FILE)
+
+        # Scale down to one unit
+        app.scale(scale=1)
+
+        # wait for unit to be ready
+        await self.model.block_until(lambda: app.status in ("error", "blocked", "active"))
+        self.assertEqual(app.status, "active")
+
+        # Run the restart, with a delay to alleviate timing issues.
+        # TODO: check action status.
+        await app.units[0].run_action("restart", delay="1")
+
+        await self.model.block_until(lambda: app.status in ("maintenance", "error"))
+        self.assertFalse(app.status == "error")
+        await self.model.block_until(lambda: app.status in ("error", "blocked", "active"))
+        self.assertEqual(app.status, "active")
+
     async def asyncTearDown(self):
         """Destroy the test model, and disconnect from the controller.
 
