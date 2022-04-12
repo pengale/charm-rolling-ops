@@ -12,31 +12,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""A library which enables "rolling" operations across the units of a charmed Application.
+"""This is a library which enables "rolling" operations across units of a charmed Application.
 
-For example, a rolling restart, in which all units in an application restart, but no two
-units restart at the same time.
+A common use case would be to implement in "rolling restart", in which all units in an
+application restart, but no two units restart at the same time. A working example follows:
 
-In order to implement a rolling restart with this library, a charm author should add the
-following lines of code, to the following files:
-
-Add a peer relation called 'restart' to `metadata.yaml`:
+1. Add a peer relation called 'restart' to a charm's `metadata.yaml`:
 ```yaml
 peers:
     restart:
         interface: rolling_op
 ```
 
-Import the library into src/charm.py, and initialiaze a RollingOpsManager in the Charm's
+Import this library into src/charm.py, and initialize a RollingOpsManager in the Charm's
 `__init__`. The charm should also define a callback routine, which will be executed when
-this unit holds the distributed lock.
+this unit holds the distributed lock:
 
 src/charm.py
 ```python
 # ...
 from charms.rolling_ops.v0.rollingops import RollingOpsManager
 # ...
-
 class SomeCharm(...):
     def __init__(...)
         # ...
@@ -48,12 +44,19 @@ class SomeCharm(...):
         systemd.service_restart('foo')
 ```
 
-To kick off the rolling restart, emit this library's AcquireLock event in your charm. For
-example, you might do so with an action:
+To kick off the rolling restart, emit this library's AcquireLock event in the charm. A
+simple way to do so would be with an action:
 
 ```python
     def _on_trigger_restart(self, event):
         self.charm.on[self.restart_manager.name].acquire_lock.emit()
+```
+
+In order to trigger the restart, a human operator would execute the following command on
+the CLI:
+
+```
+juju run-action some-charm/0 some-charm/1 <... some-charm/n> restart
 ```
 
 """

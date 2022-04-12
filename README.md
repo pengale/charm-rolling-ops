@@ -7,7 +7,9 @@ implementation against it.
 
 ## Usage
 
-Use this charm to learn about the Rolling Ops library.
+Operators may use charm as a reference when including the Rolling Ops
+lib in their own charms. This repo also contains tests for the
+library, using the reference charm.
 
 
 ## Relations
