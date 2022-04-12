@@ -6,5 +6,5 @@ restart:
   params:
     delay:
       description: "Introduce an artificial delay (for testing)."
-      type: string
-      default: null
+      type: integer
+      default: 0
