@@ -4,31 +4,35 @@
 
 Create and activate a virtualenv with the development requirements:
 
-    virtualenv -p python3 venv
-    source venv/bin/activate
-    pip install -r requirements-dev.txt
+```
+pip install tox
+tox
+source .tox/unit/bin/activate
+```
 
 ## Code overview
 
-TEMPLATE-TODO:
-One of the most important things a consumer of your charm (or library)
-needs to know is what set of functionality it provides. Which categories
-does it fit into? Which events do you listen to? Which libraries do you
-consume? Which ones do you export and how are they used?
+The rolling ops library lives in
+`lib/charms/rolling_ops/v0/rollingops.py`. The example charm lives in
+`src/charm.py`.
 
 ## Intended use case
 
-TEMPLATE-TODO:
-Why were these decisions made? What's the scope of your charm?
+The charm herein has no production use -- it serves simply to host,
+test, and document the `rollingops` library.
 
-## Roadmap
-
-If this Charm doesn't fulfill all of the initial functionality you were
-hoping for or planning on, please add a Roadmap or TODO here
+Charm authors may include the Rolling Ops library in the [same way
+that any charm library](https://juju.is/docs/sdk/libraries) may be
+included.
 
 ## Testing
 
 The Python operator framework includes a very nice harness for testing
-operator behaviour without full deployment. Just `run_tests`:
+operator behaviour without full deployment. Simply run `tox`.
 
-    ./run_tests
+Prior to publishing an update to this library, developers should be
+sure additionally run `tox -e integration`. This will run a separate
+set of tests against a live environment. Note that `juju` must be
+installed, and a bare metal or vm controller must be bootstrapped.
+
+Manual tests may be run by following the instructions in test/QA.md.

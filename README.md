@@ -2,12 +2,14 @@
 
 ## Description
 
-This charm contains the "Rolling Ops" library, along with an example
+This charm contains the `rollingops` library, along with an example
 implementation against it.
 
 ## Usage
 
-Use this charm to learn about the Rolling Ops library.
+Operators may use charm as a reference when including the `rollingops`
+lib in their own charms. This repo also contains tests for the
+library, using the reference charm.
 
 
 ## Relations
