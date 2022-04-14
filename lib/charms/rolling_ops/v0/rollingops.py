@@ -12,10 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""This is a library which enables "rolling" operations across units of a charmed Application.
+"""This library enables "rolling" operations across units of a charmed Application.
 
-A common use case would be to implement in "rolling restart", in which all units in an
-application restart, but no two units restart at the same time. A working example follows:
+For example, a charm author might use this library to implement a "rolling restart", in
+which all units in an application restart their workload, but no two units execute the
+restart at the same time.
+
+To implement the rolling restart, a charm author would do the following:
 
 1. Add a peer relation called 'restart' to a charm's `metadata.yaml`:
 ```yaml
@@ -25,8 +28,8 @@ peers:
 ```
 
 Import this library into src/charm.py, and initialize a RollingOpsManager in the Charm's
-`__init__`. The charm should also define a callback routine, which will be executed when
-this unit holds the distributed lock:
+`__init__`. The Charm should also define a callback routine, which will be executed when
+a unit holds the distributed lock:
 
 src/charm.py
 ```python
@@ -44,8 +47,9 @@ class SomeCharm(...):
         systemd.service_restart('foo')
 ```
 
-To kick off the rolling restart, emit this library's AcquireLock event in the charm. A
-simple way to do so would be with an action:
+To kick off the rolling restart, emit this library's AcquireLock event. The simplest way
+to do so would be with an action, though it might make sense to acquire the lock in
+response to another event. 
 
 ```python
     def _on_trigger_restart(self, event):
@@ -58,6 +62,12 @@ the CLI:
 ```
 juju run-action some-charm/0 some-charm/1 <... some-charm/n> restart
 ```
+
+Note that all units that plan to restart must receive the action and emit the aquire
+event. Any units that do not run their acquire handler will be left out of the rolling
+restart. (An operator might take advantage of this fact to recover from a failed rolling
+operation without restarting workloads that were able to successfully restart -- simply
+omit the successful units from a subsequent run-action call.)
 
 """
 import logging
@@ -78,7 +88,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 2
+LIBPATCH = 1
 
 
 class LockNoRelationError(Exception):
