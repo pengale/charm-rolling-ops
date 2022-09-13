@@ -8,3 +8,12 @@ restart:
       description: "Introduce an artificial delay (for testing)."
       type: integer
       default: 0
+
+custom-restart:
+  description: Restarts the example service
+  params:
+    delay:
+      description: "Introduce an artificial delay (for testing)."
+      type: integer
+      default: 0
+

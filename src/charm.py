@@ -41,6 +41,7 @@ class CharmRollingOpsCharm(CharmBase):
 
         self.framework.observe(self.on.install, self._on_install)
         self.framework.observe(self.on.restart_action, self._on_restart_action)
+        self.framework.observe(self.on.custom_restart_action, self._on_custom_restart_action)
 
         # Sentinel for testing (omit from production charms)
         self._stored.set_default(restarted=False)
@@ -53,14 +54,29 @@ class CharmRollingOpsCharm(CharmBase):
         if self._stored.delay:
             time.sleep(int(self._stored.delay))
         self._stored.restarted = True
+        self.model.get_relation(self.name).data[self.unit].update({"restart-type": "restart"})
+
+    def _custom_restart(self, event):
+        # In a production charm, we'd perhaps import the systemd library, and run
+        # systemd.restart_service.  Here, we just set a sentinal in our stored state, so
+        # that we can run our tests.
+        if self._stored.delay:
+            time.sleep(int(self._stored.delay))
+        self._stored.custom_restarted = True
+        self.model.get_relation(self.name).data[self.unit].update(
+            {"restart-type": "custom-restart"}
+        )
 
     def _on_install(self, event):
         self.unit.status = ActiveStatus()
 
     def _on_restart_action(self, event):
         self._stored.delay = event.params.get("delay")
-
         self.on[self.restart_manager.name].acquire_lock.emit()
+
+    def _on_custom_restart_action(self, event):
+        self._stored.delay = event.params.get("delay")
+        self.on[self.restart_manager.name].acquire_lock.emit(callback_override="_custom_restart")
 
 
 if __name__ == "__main__":
