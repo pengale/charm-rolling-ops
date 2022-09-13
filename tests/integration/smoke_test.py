@@ -19,7 +19,6 @@ import logging
 import subprocess
 import unittest
 import uuid
-from typing import Tuple
 
 from juju.model import Controller
 from juju.unit import Unit
@@ -70,15 +69,15 @@ class TestSmoke(unittest.IsolatedAsyncioTestCase):
         operations multiple times in a row.
 
         """
-        model_name = "test-rolling-{}".format(uuid.uuid4())
+        self.model_name = "test-rolling-{}".format(uuid.uuid4())
 
         self.controller = Controller()
         await self.controller.connect()
 
-        self.model = await self.controller.add_model(model_name)
+        self.model = await self.controller.add_model(self.model_name)
 
     async def test_smoke(self):
-        """Basic smoke test.
+        """Basic smoke test following the default callback implementation.
 
         Verify that we can deploy, and seem to be able to run a rolling op.
         """
@@ -89,15 +88,20 @@ class TestSmoke(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(app.status, "active")
 
-        # Run the restart, with a delay to alleviate timing issues.
-        for unit in app.units:
-            # TODO: check action status.
-            await unit.run_action("restart", delay="1")
+        for action in ["restart", "custom-restart"]:
+            # Run the restart, with a delay to alleviate timing issues.
+            for unit in app.units:
+                await unit.run_action(action, delay="1")
 
-        await self.model.block_until(lambda: app.status in ("maintenance", "error"))
-        self.assertFalse(app.status == "error")
-        await self.model.block_until(lambda: app.status in ("error", "blocked", "active"))
-        self.assertEqual(app.status, "active")
+            await self.model.block_until(lambda: app.status in ("maintenance", "error"))
+            self.assertFalse(app.status == "error")
+            await self.model.block_until(lambda: app.status in ("error", "blocked", "active"))
+            self.assertEqual(app.status, "active")
+
+            for unit in app.units:
+                restart, restart_type = get_restart_type(unit=unit, model_name=self.model_name)
+                self.assertEqual(restart, "successful")
+                self.assertEqual(restart_type, action)
 
     async def test_smoke_single_unit(self):
         """Basic smoke test, on a single unit.
@@ -114,14 +118,18 @@ class TestSmoke(unittest.IsolatedAsyncioTestCase):
         await self.model.block_until(lambda: app.status in ("error", "blocked", "active"))
         self.assertEqual(app.status, "active")
 
-        # Run the restart, with a delay to alleviate timing issues.
-        # TODO: check action status.
-        await app.units[0].run_action("restart", delay="1")
+        for action in ["restart", "custom-restart"]:
+            # Run the restart, with a delay to alleviate timing issues.
+            await app.units[0].run_action(action, delay="1")
 
-        await self.model.block_until(lambda: app.status in ("maintenance", "error"))
-        self.assertFalse(app.status == "error")
-        await self.model.block_until(lambda: app.status in ("error", "blocked", "active"))
-        self.assertEqual(app.status, "active")
+            await self.model.block_until(lambda: app.status in ("maintenance", "error"))
+            self.assertFalse(app.status == "error")
+            await self.model.block_until(lambda: app.status in ("error", "blocked", "active"))
+            self.assertEqual(app.status, "active")
+
+            restart, restart_type = get_restart_type(unit=app.units[0], model_name=self.model_name)
+            self.assertEqual(restart, "successful")
+            self.assertEqual(restart_type, action)
 
     async def asyncTearDown(self):
         """Destroy the test model, and disconnect from the controller.
@@ -133,3 +141,4 @@ class TestSmoke(unittest.IsolatedAsyncioTestCase):
         """
         await self.controller.destroy_model(self.model.info.uuid)
         await self.controller.disconnect()
+
