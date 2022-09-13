@@ -14,11 +14,15 @@
 #
 # Learn more about testing at: https://juju.is/docs/sdk/testing
 
+import json
 import logging
+import subprocess
 import unittest
 import uuid
+from typing import Tuple
 
 from juju.model import Controller
+from juju.unit import Unit
 
 CHARM_FILE = "./rolling-ops_ubuntu-20.04-amd64.charm"
 
@@ -26,6 +30,21 @@ logging.basicConfig(level=logging.INFO)
 
 ws_logger = logging.getLogger("websockets.protocol")
 ws_logger.setLevel(logging.INFO)
+
+
+def get_restart_type(unit: Unit, model_name: str) -> str:
+    show_unit_json = subprocess.check_output(
+        f"JUJU_MODEL={model_name} juju show-unit {unit.name} --format json",
+        stderr=subprocess.PIPE,
+        shell=True,
+        universal_newlines=True,
+    )
+    show_unit_dict = json.loads(show_unit_json)
+    restart_type = show_unit_dict[unit.name]["relation-info"][0]["local-unit"]["data"][
+        "restart-type"
+    ]
+
+    return restart_type
 
 
 class TestSmoke(unittest.IsolatedAsyncioTestCase):
