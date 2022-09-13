@@ -54,16 +54,16 @@ class CharmRollingOpsCharm(CharmBase):
         if self._stored.delay:
             time.sleep(int(self._stored.delay))
         self._stored.restarted = True
-        self.model.get_relation(self.name).data[self.unit].update({"restart-type": "restart"})
+
+        self.model.get_relation(self.restart_manager.name).data[self.unit].update(
+            {"restart-type": "restart"}
+        )
 
     def _custom_restart(self, event):
-        # In a production charm, we'd perhaps import the systemd library, and run
-        # systemd.restart_service.  Here, we just set a sentinal in our stored state, so
-        # that we can run our tests.
         if self._stored.delay:
             time.sleep(int(self._stored.delay))
-        self._stored.custom_restarted = True
-        self.model.get_relation(self.name).data[self.unit].update(
+
+        self.model.get_relation(self.restart_manager.name).data[self.unit].update(
             {"restart-type": "custom-restart"}
         )
 

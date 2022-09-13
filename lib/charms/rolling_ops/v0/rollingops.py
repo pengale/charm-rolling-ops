@@ -269,7 +269,7 @@ class AcquireLock(EventBase):
         return {"callback_override": self.callback_override}
 
     def restore(self, snapshot):
-        self.callback = snapshot["callback_override"]
+        self.callback_override = snapshot["callback_override"]
 
 
 class ProcessLocks(EventBase):
