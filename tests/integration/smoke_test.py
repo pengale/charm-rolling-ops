@@ -14,103 +14,117 @@
 #
 # Learn more about testing at: https://juju.is/docs/sdk/testing
 
+import asyncio
+import json
 import logging
-import unittest
-import uuid
+import subprocess
 
-from juju.model import Controller
+import pytest
+from juju.action import Action
+from juju.application import Application
+from juju.model import JujuAPIError, Model
+from juju.unit import Unit
+from pytest_operator.plugin import OpsTest
 
-CHARM_FILE = "./rolling-ops_ubuntu-20.04-amd64.charm"
-
-logging.basicConfig(level=logging.INFO)
-
-ws_logger = logging.getLogger("websockets.protocol")
-ws_logger.setLevel(logging.INFO)
+logger = logging.getLogger(__name__)
 
 
-class TestSmoke(unittest.IsolatedAsyncioTestCase):
-    """Integration test class.
+def get_restart_type(unit: Unit, model_name: str) -> str:
+    show_unit_json = subprocess.check_output(
+        f"JUJU_MODEL={model_name} juju show-unit {unit.name} --format json",
+        stderr=subprocess.PIPE,
+        shell=True,
+        universal_newlines=True,
+    )
+    show_unit_dict = json.loads(show_unit_json)
+    restart_type = show_unit_dict[unit.name]["relation-info"][0]["local-unit"]["data"][
+        "restart-type"
+    ]
 
-    Inherits from IsolatedAsyncioTestCase, which is lovely, though it does (as of this
-    writing) use the deprecated loop method to run its coroutines.
+    return restart_type
 
-    # TODO: see if we can patch in jasyncio.
 
+@pytest.mark.abort_on_fail
+async def test_smoke(ops_test: OpsTest):
+    """Basic smoke test following the default callback implementation.
+
+    Verify that we can deploy, and seem to be able to run a rolling op.
     """
+    # to spare the typechecker errors
+    assert ops_test.model
+    assert ops_test.model_full_name
+    model: Model = ops_test.model
+    model_full_name: str = ops_test.model_full_name
 
-    model = None  # An instance of Model from pylibjuju, representing the current model.
-    controller = None  # An instance of Controller.
+    # Deploy, and verify deployment
+    charm = await ops_test.build_charm(".")
+    await asyncio.gather(ops_test.model.deploy(charm, application_name="rolling-ops", num_units=3))
 
-    async def asyncSetUp(self):
-        """Connect to the controller, and create a new model, with a unique uuid.
+    # to spare the typechecker errors
+    assert model.applications["rolling-ops"]
+    app: Application = model.applications["rolling-ops"]
 
-        This means that each test will run on a fresh model, meaning that there will be no
-        artifacts left from previous tests.
+    await ops_test.model.block_until(lambda: app.status in ("error", "blocked", "active"))
+    assert app.status == "active"
 
-        The downside is that we will be deploying our charm and performing other lengthy
-        operations multiple times in a row.
-
-        """
-        model_name = "test-rolling-{}".format(uuid.uuid4())
-
-        self.controller = Controller()
-        await self.controller.connect()
-
-        self.model = await self.controller.add_model(model_name)
-
-    async def test_smoke(self):
-        """Basic smoke test.
-
-        Verify that we can deploy, and seem to be able to run a rolling op.
-        """
-        # Deploy, and verify deployment
-        app = await self.model.deploy(CHARM_FILE)
-        await app.add_units(count=2)
-        await self.model.block_until(lambda: app.status in ("error", "blocked", "active"))
-
-        self.assertEqual(app.status, "active")
-
+    for action_type in ["restart", "custom-restart"]:
         # Run the restart, with a delay to alleviate timing issues.
         for unit in app.units:
-            # TODO: check action status.
-            await unit.run_action("restart", delay="1")
+            logger.info(f"{action_type} - {unit.name}")
+            action: Action = await unit.run_action(action_type, delay=1)
+            await action.wait()
+            assert action.results.get("return-code", None) == 0
 
-        await self.model.block_until(lambda: app.status in ("maintenance", "error"))
-        self.assertFalse(app.status == "error")
-        await self.model.block_until(lambda: app.status in ("error", "blocked", "active"))
-        self.assertEqual(app.status, "active")
+        await model.block_until(lambda: app.status in ("maintenance", "error"), timeout=60)
+        assert app.status != "error"
 
-    async def test_smoke_single_unit(self):
-        """Basic smoke test, on a single unit.
+        await model.block_until(lambda: app.status in ("error", "blocked", "active"), timeout=60)
+        assert app.status == "active"
 
-        Verify that deployment and rolling ops suceed for a single unit.
-        """
-        # Grab the application
-        app = await self.model.deploy(CHARM_FILE)
+        for unit in app.units:
+            restart_type = get_restart_type(unit=unit, model_name=model_full_name)
+            assert restart_type == action_type
 
-        # Scale down to one unit
-        app.scale(scale=1)
 
-        # wait for unit to be ready
-        await self.model.block_until(lambda: app.status in ("error", "blocked", "active"))
-        self.assertEqual(app.status, "active")
+@pytest.mark.abort_on_fail
+async def test_smoke_single_unit(ops_test):
+    """Basic smoke test, on a single unit.
 
+    Verify that deployment and rolling ops suceed for a single unit.
+    """
+    # to spare the typechecker errors
+    assert ops_test.model
+    assert ops_test.model_full_name
+    model: Model = ops_test.model
+    model_full_name: str = ops_test.model_full_name
+
+    assert model.applications["rolling-ops"]
+    app: Application = model.applications["rolling-ops"]
+
+    # Scale down to one unit
+    try:
+        await app.scale(1)
+    except JujuAPIError:  # handling vm vs k8s
+        await app.destroy_units("rolling-ops/2", "rolling-ops/1")
+
+    # wait for unit to be ready
+    await model.block_until(lambda: len(app.units) == 1)
+    assert app.status == "active"
+
+    for action_type in ["restart", "custom-restart"]:
         # Run the restart, with a delay to alleviate timing issues.
-        # TODO: check action status.
-        await app.units[0].run_action("restart", delay="1")
+        logger.info(f"{action_type} - {app.units[0].name}")
+        action: Action = await app.units[0].run_action(action_type, delay=1)
 
-        await self.model.block_until(lambda: app.status in ("maintenance", "error"))
-        self.assertFalse(app.status == "error")
-        await self.model.block_until(lambda: app.status in ("error", "blocked", "active"))
-        self.assertEqual(app.status, "active")
+        await model.block_until(lambda: app.status in ("maintenance", "error"), timeout=60)
+        assert app.status != "error"
 
-    async def asyncTearDown(self):
-        """Destroy the test model, and disconnect from the controller.
+        await action.wait()
+        assert action.results.get("return-code", None) == 0
 
-        If we wanted to allow tests to share a model, we'd need to do something clever in
-        order to run this once, after all tests have completed (tearDownClass doesn't have
-        an async equivalent).
+        await model.block_until(lambda: app.status in ("error", "blocked", "active"), timeout=60)
+        assert app.status == "active"
 
-        """
-        await self.controller.destroy_model(self.model.info.uuid)
-        await self.controller.disconnect()
+        for unit in app.units:
+            restart_type = get_restart_type(unit=unit, model_name=model_full_name)
+            assert restart_type == action_type
