@@ -17,8 +17,8 @@
 For example, a charm author might use this library to implement a "rolling restart", in
 which all units in an application restart their workload, but no two units execute the
 restart at the same time.
-
 To implement the rolling restart, a charm author would do the following:
+
 1. Add a peer relation called 'restart' to a charm's `metadata.yaml`:
 
 ```yaml
@@ -30,8 +30,8 @@ peers:
 Import this library into src/charm.py, and initialize a RollingOpsManager in the Charm's
 `__init__`. The Charm should also define a callback routine, which will be executed when
 a unit holds the distributed lock:
-src/charm.py
 
+src/charm.py
 ```python
 # ...
 from charms.rolling_ops.v0.rollingops import RollingOpsManager
@@ -68,6 +68,7 @@ event. Any units that do not run their acquire handler will be left out of the r
 restart. (An operator might take advantage of this fact to recover from a failed rolling
 operation without restarting workloads that were able to successfully restart -- simply
 omit the successful units from a subsequent run-action call.)
+
 """
 import logging
 from enum import Enum
@@ -100,6 +101,7 @@ class LockState(Enum):
     """Possible states for our Distributed lock.
 
     Note that there are two states set on the unit, and two on the application.
+
     """
 
     ACQUIRE = "acquire"
@@ -118,9 +120,11 @@ class Lock:
 
     This class tracks state across the cloud by implementing a peer relation
     interface. There are two parts to the interface:
+
     1) The data on a unit's peer relation (defined in metadata.yaml.) Each unit can update
        this data. The only meaningful values are "acquire", and "release", which represent
        a request to acquire the lock, and a request to release the lock, respectively.
+
     2) The application data in the relation. This tracks whether the lock has been
        "granted", Or has been released (and reverted to idle). There are two valid states:
        "granted" or None.  If a lock is in the "granted" state, a unit should emit a
@@ -129,6 +133,7 @@ class Lock:
        that the request has been completed.
 
     In more detail, here is the relation structure:
+
     relation.data:
         <unit n>:
             status: 'acquire|release'
@@ -139,6 +144,7 @@ class Lock:
     requests in a row. If a unit re-requests a lock before being granted the lock, the
     lock will simply stay in the "acquire" state. If a unit wishes to clear its lock, it
     simply needs to call lock.release().
+
     """
 
     def __init__(self, manager, unit=None):
@@ -156,8 +162,10 @@ class Lock:
 
         Note that the state exists in the unit's relation data, and the application
         relation data, so we have to be careful about what our states mean.
+
         Unit state can only be in "acquire", "release", "None" (None means unset)
         Application state can only be in "granted" or "None" (None means unset or released)
+
         """
         unit_state = LockState(self.relation.data[self.unit].get("state", LockState.IDLE.value))
         app_state = LockState(
@@ -309,7 +317,6 @@ class RollingOpsManager(Object):
         """Placeholder for the function that actually runs our event.
 
         Usually overridden in the init.
-
         """
         raise NotImplementedError
 
@@ -317,7 +324,9 @@ class RollingOpsManager(Object):
         """Update Locks.
 
         First, determine whether this unit has been granted a lock. If so, emit a RunWithLock
-        event. Then, if we are the leader, fire off a process locks event.
+        event.
+
+        Then, if we are the leader, fire off a process locks event.
 
         If a leader is removed before the chain of events finishes, the new leader never receives
         a ProcessLocks event. To get around this, call this function on LeaderElected.
