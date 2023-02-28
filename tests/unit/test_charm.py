@@ -38,6 +38,7 @@ class TestCharm(unittest.TestCase):
     def test_acquire(self):
         # A human operator runs the "restart" action.
         action_event = Mock()
+        action_event.callback_override = "callback_override"
         self.harness.charm.restart_manager._on_acquire_lock(action_event)
 
         data = self.harness.charm.model.relations["restart"][0].data
@@ -46,7 +47,6 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(data[self.harness.model.unit]["state"], "acquire")
 
     def test_peers(self):
-
         # Set unit 0 as the leader.
         # Add a peer relation to a unit 1.
         self.harness.set_leader(True)
