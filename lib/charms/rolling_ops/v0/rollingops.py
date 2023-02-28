@@ -17,10 +17,10 @@
 For example, a charm author might use this library to implement a "rolling restart", in
 which all units in an application restart their workload, but no two units execute the
 restart at the same time.
+
 To implement the rolling restart, a charm author would do the following:
 
 1. Add a peer relation called 'restart' to a charm's `metadata.yaml`:
-
 ```yaml
 peers:
     restart:
@@ -129,6 +129,7 @@ class Lock:
        "granted", Or has been released (and reverted to idle). There are two valid states:
        "granted" or None.  If a lock is in the "granted" state, a unit should emit a
        RunWithLocks event and then release the lock.
+
        If a lock is in "None", this means that a unit has not yet requested the lock, or
        that the request has been completed.
 
